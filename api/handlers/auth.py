@@ -26,6 +26,11 @@ class AuthHandler(BaseHandler):
             'token': token
         }, {
             'email': 1,
+            'password': 1,
+            'address': 1,
+            'dob': 1,
+            'disability': 1,
+            'salt': 1,
             'displayName': 1,
             'expiresIn': 1
         })
@@ -41,7 +46,14 @@ class AuthHandler(BaseHandler):
             self.send_error(403, message='Your token has expired!')
             return
 
+        #decryption new variable here 
+
         self.current_user = {
             'email': user['email'],
+            'password': user['password'],
+            'address': user['address'],
+            'dob': user['dob'],
+            'disability': user['disability'],
+            'salt': user['salt'],
             'display_name': user['displayName']
         }

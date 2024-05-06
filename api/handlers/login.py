@@ -1,3 +1,7 @@
+import os
+from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+#from registration.py import hPassword
+
 from datetime import datetime, timedelta
 from time import mktime
 from tornado.escape import json_decode, utf8
@@ -49,18 +53,41 @@ class LoginHandler(BaseHandler):
             self.send_error(400, message='The password is invalid!')
             return
 
+        ##Searches for a user with an email address in the db, 
+        ##The yield keyword is used to pass a value back
+        ##
+        ##The find_one() method of self.db.users in the db is being
+        ##called with two arguments: a dictionary that specifies the search criteria
+        ##(the email address to search for), and another that specifies which
+        ##fields to include in the result
+        ##(the 'password' which is a hash and, and the 'salt' field which is a hex).
         user = yield self.db.users.find_one({
           'email': email
         }, {
-          'password': 1
+          'password': 1,#this searches for password stored in db which is hashed password
+          'salt': 1
         })
 
         if user is None:
             self.send_error(403, message='The email address and password are invalid!')
             return
+        #to distinguish between the login password and the db hashed password passwordH is used
+        passwordH = user['password']
+        salt = user['salt']
+        saltB = bytes.fromhex(salt)
+#       saltS = bytes(salt, "utf-8")
 
-        if user['password'] != password:
-            self.send_error(403, message='The email address and password are invalid!')
+#rehash here
+        kdf = Scrypt(saltB, length=32, n=2**14, r=8, p=1)
+        #Step3: password rehash
+        #password here is the login password
+        password_bytes = bytes(password, "utf-8")
+        hashed_password = kdf.derive(password_bytes)
+
+        
+#       if user['password'] != hashed_password.hex():
+        if passwordH != hashed_password.hex():
+            self.send_error(403, message='The email address or password is invalid!')
             return
 
         token = yield self.generate_token(email)
