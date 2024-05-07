@@ -71,13 +71,14 @@ class RegistrationHandler(BaseHandler):
         if user is not None:
             self.send_error(409, message='A user with the given email address already exists!')
             return
+        
 ########## Salt ######################
 
-#Step 1: generate the salt -  16 bytes (128 bits)
+#generate the salt -  16 bytes (128 bits)
         salt = os.urandom(16)
-#Step 2: configure the PBKDF
+#configure the PBKDF
         kdf = Scrypt(salt=salt, length=32, n=2**14, r=8, p=1)
-#Step3: password hash here
+#password hash here
         password_bytes = bytes(password, "utf-8")
         hashed_password = kdf.derive(password_bytes)
         #cast hashed password into hex and save to pwhashed
@@ -86,48 +87,43 @@ class RegistrationHandler(BaseHandler):
         saltH = salt.hex()
 
 ########### Encryption ###############
-        key = "theluckykeyisace"
-    
-        key_bytes = bytes(key, "utf-8")
-        nonce_bytes = b'\x84\xf2\xc5]\x06\x1f\xc8Z\xb3\xe3\xc2\xd61\xf1~\xd4'
-
-    
-#aes in counter mode
-#nonce needed here in order to initialise it.
-#encryptor and decryptor created
-        aes_ctr_cipher = Cipher(algorithms.AES(key_bytes),
-                                mode=modes.CTR(nonce_bytes))
-        aes_ctr_encryptor = aes_ctr_cipher.encryptor()
-
-#user_address = user_address_in
-    #set plaintext
-        plaintext = address
-        plaintext_bytes = bytes(plaintext, "utf-8")
-
-    #encrypt plaintext
-        ciphertext_bytes = aes_ctr_encryptor.update(plaintext_bytes)
-        ciphertext = ciphertext_bytes.hex()
-
+#encrypt address, display_name, dob, disability
+        ciphertext_address = self.encrypt_details(address)
+        ciphertext_display_name = self.encrypt_details(display_name)
+        ciphertext_dob = self.encrypt_details(dob)
+        ciphertext_disability = self.encrypt_details(disability)
        
         ### Inserts the user data (including email, hashed password,
         ### encrypted address, etc.) into the database.
         yield self.db.users.insert_one({
             'email': email,
             'password': pwhashed,
-            'address': ciphertext,
-            'dob': dob,
-            'disability': disability,
+            'address': ciphertext_address,
+            'dob': ciphertext_dob,
+            'disability': ciphertext_disability,
             'salt': saltH,
-            'displayName': display_name
+            'displayName': ciphertext_display_name
         })
         
         self.set_status(200)
         self.response['email'] = email
         self.response['password'] = pwhashed #added here for testing purposes
-        self.response['address'] = ciphertext
-        self.response['dob'] = dob
-        self.response['disability'] = disability
+        self.response['address'] = ciphertext_address
+        self.response['dob'] = ciphertext_dob
+        self.response['disability'] = ciphertext_disability
         self.response['salt'] = saltH # added it here for testing purposes
-        self.response['displayName'] = display_name
+        self.response['displayName'] = ciphertext_display_name
 
         self.write_json()
+
+    def encrypt_details(self, details):
+        key = "theluckykeyisace"
+        key_bytes = bytes(key, "utf-8")
+        nonce_bytes = b'\x84\xf2\xc5]\x06\x1f\xc8Z\xb3\xe3\xc2\xd61\xf1~\xd4'
+        aes_ctr_cipher = Cipher(algorithms.AES(key_bytes), mode=modes.CTR(nonce_bytes))
+        aes_ctr_encryptor = aes_ctr_cipher.encryptor()
+        plaintext_bytes = bytes(details, "utf-8")
+        ciphertext_bytes = aes_ctr_encryptor.update(plaintext_bytes) + aes_ctr_encryptor.finalize()
+        ciphertext = ciphertext_bytes.hex()
+        return ciphertext
+        
